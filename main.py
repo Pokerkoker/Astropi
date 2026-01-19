@@ -1,7 +1,7 @@
 from exif import Image
 from datetime import datetime
 import cv2
-import math 
+import math
 
 image_1 = 'photo_0683.jpg'
 image_2 = 'photo_0684.jpg'
@@ -99,4 +99,4 @@ speed_formatted = format_speed(speed, 5)
 print(speed_formatted)
 
 with open('result.txt', 'w') as file:
-      file.write(speed_formatted)
+    file.write(speed_formatted)

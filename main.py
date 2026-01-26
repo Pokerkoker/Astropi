@@ -3,13 +3,12 @@ from datetime import datetime
 import cv2
 import math
 
-image_1 = 'photo_0683.jpg'
-image_2 = 'photo_0684.jpg'
+image_1 = 'imgs/photo_393_53245738275_o.jpg'
+image_2 = 'imgs/photo_394_53245245041_o.jpg'
 
 def get_time(image):
     with open(image, 'rb') as image_file:
         img = Image(image_file)
-
         time_str = img.get("datetime_original")
         time = datetime.strptime(time_str, '%Y:%m:%d %H:%M:%S')
     return time
@@ -41,7 +40,8 @@ def calculate_matches(descriptors_1, descriptors_2):
     return matches
 
 image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
-keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+
+keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 500)
 matches = calculate_matches(descriptors_1, descriptors_2)
 
 def display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches):
@@ -70,13 +70,19 @@ coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_
 def calculate_mean_distance(coordinates_1, coordinates_2):
     all_distances = 0
     merged_coordinates = list(zip(coordinates_1, coordinates_2))
+    distances = []
     for coordinate in merged_coordinates:
         x_difference = coordinate[0][0] - coordinate[1][0]
         y_difference = coordinate[0][1] - coordinate[1][1]
-    distance = math.hypot(x_difference, y_difference)
-    all_distances = all_distances + distance
-    average = all_distances / len(merged_coordinates)
-    return average
+        distance = math.hypot(x_difference, y_difference)
+        distances.append(distance)
+    print(len(distances))
+    return mediaan(distances)
+
+def mediaan(distances):
+    distances.sort()
+
+    return distances[int(len(distances)/2)]
 
 average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 

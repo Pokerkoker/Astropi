@@ -2,6 +2,8 @@ from exif import Image
 from datetime import datetime
 import cv2
 import math
+import os
+
 
 image_1 = 'imgs/photo_393_53245738275_o.jpg'
 image_2 = 'imgs/photo_394_53245245041_o.jpg'
@@ -41,7 +43,7 @@ def calculate_matches(descriptors_1, descriptors_2):
 
 image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
 
-keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 500)
+keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
 matches = calculate_matches(descriptors_1, descriptors_2)
 
 def display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches):
@@ -51,7 +53,7 @@ def display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches):
     cv2.waitKey(0)
     cv2.destroyWindow('matches')
 
-display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
+#display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
 
 def find_matching_coordinates(keypoints_1, keypoints_2, matches):
         coordinates_1 = []
@@ -76,13 +78,17 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
         y_difference = coordinate[0][1] - coordinate[1][1]
         distance = math.hypot(x_difference, y_difference)
         distances.append(distance)
-    print(len(distances))
-    return mediaan(distances)
+    return filter(distances,10)
 
-def mediaan(distances):
+def filter(distances,count): # Takes a list of distances, sorts it and gets the avarage distances of the middel 10 items.
+    distance = 0
+    length = len(distances)
     distances.sort()
 
-    return distances[int(len(distances)/2)]
+    for i in range(int(length/2)-int(count/2),int(length/2)+int(count/2)):
+        distance += distances[i]
+
+    return distance/10
 
 average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
@@ -106,3 +112,50 @@ print(speed_formatted)
 
 with open('result.txt', 'w') as file:
     file.write(speed_formatted)
+
+image_folder = "./imgs"
+image_extensions = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
+
+images = [
+    os.path.join(image_folder, f)
+    for f in os.listdir(image_folder)
+    if f.lower().endswith(image_extensions)
+]
+
+image_1
+
+image_2 = images[1]
+
+speed_list = []
+
+for image_2 in images:
+    
+    time_difference = get_time_difference(image_1, image_2)
+
+    image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+    matches = calculate_matches(descriptors_1, descriptors_2)
+
+    try:
+
+        coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
+
+        average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+
+        GSD = 12648
+        speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+        speed_formatted = format_speed(speed, 5)
+
+        speed_list.append(speed_formatted)
+
+        avrage_speed = filter(speed_list,1)
+
+        print(avrage_speed)
+
+        
+
+    except:
+        print("Te weinig featers.")
+
+    image_1 = image_2

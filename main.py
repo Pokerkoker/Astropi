@@ -2,9 +2,13 @@ from exif import Image
 from datetime import datetime
 import cv2
 import math
+import os
+import time
+from picamera import PiCamera
+from picamzero import Camera
 
-image_1 = 'imgs/photo_393_53245738275_o.jpg'
-image_2 = 'imgs/photo_394_53245245041_o.jpg'
+# image_1 = 'imgs/photo_393_53245738275_o.jpg'
+# image_2 = 'imgs/photo_394_53245245041_o.jpg'
 
 def get_time(image):
     with open(image, 'rb') as image_file:
@@ -20,7 +24,7 @@ def get_time_difference(image_1, image_2):
 
     return time_difference.seconds
 
-time_difference = get_time_difference(image_1, image_2)
+#time_difference = get_time_difference(image_1, image_2)
 
 def convert_to_cv(image_1, image_2):
     image_1_cv = cv2.imread(image_1, 0)
@@ -39,10 +43,10 @@ def calculate_matches(descriptors_1, descriptors_2):
     matches = sorted(matches, key=lambda x: x.distance)
     return matches
 
-image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+#image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
 
-keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 500)
-matches = calculate_matches(descriptors_1, descriptors_2)
+#keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+#matches = calculate_matches(descriptors_1, descriptors_2)
 
 def display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches):
     match_img = cv2.drawMatches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches[:100], None)
@@ -51,7 +55,7 @@ def display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches):
     cv2.waitKey(0)
     cv2.destroyWindow('matches')
 
-display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
+#display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
 
 def find_matching_coordinates(keypoints_1, keypoints_2, matches):
         coordinates_1 = []
@@ -65,7 +69,7 @@ def find_matching_coordinates(keypoints_1, keypoints_2, matches):
             coordinates_2.append((x2,y2))
         return coordinates_1, coordinates_2
 
-coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
+#coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
 
 def calculate_mean_distance(coordinates_1, coordinates_2):
     all_distances = 0
@@ -76,15 +80,19 @@ def calculate_mean_distance(coordinates_1, coordinates_2):
         y_difference = coordinate[0][1] - coordinate[1][1]
         distance = math.hypot(x_difference, y_difference)
         distances.append(distance)
-    print(len(distances))
-    return mediaan(distances)
+    return filter(distances,10)
 
-def mediaan(distances):
+def filter(distances,count): # Takes a list of distances, sorts it and gets the avarage distances of the middel 10 items.
+    distance = 0
+    length = len(distances)
     distances.sort()
 
-    return distances[int(len(distances)/2)]
+    for i in range(int(length/2)-int(count/2),int(length/2)+int(count/2)):
+        distance += distances[i]
 
-average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+    return distance/10
+
+#average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
     distance = feature_distance * GSD / 100000 # conversie van pixels naar km
@@ -98,11 +106,59 @@ def format_speed(speed, nr_of_digits):
 
     return speed_formatted
 
-GSD = 12648
-speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
-speed_formatted = format_speed(speed, 5)
+start_time = datetime.now()
 
-print(speed_formatted)
 
-with open('result.txt', 'w') as file:
-    file.write(speed_formatted)
+from picamzero import Camera
+
+cam = Camera()
+
+
+
+image_1 = cam.take_photo("photo1.jpg")
+image_2 = cam.take_photo("photo2.jpg")  
+
+while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
+    
+    image_1 = cam.take_photo("photo1.jpg")
+
+    time.sleep(45)
+
+    image_2 = cam.take_photo("photo2.jpg")
+
+    images = []
+
+    speed_list = []
+        
+    time_difference = get_time_difference(image_1, image_2)
+
+    image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+    matches = calculate_matches(descriptors_1, descriptors_2)
+
+    try:
+
+        coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
+
+        average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+
+        GSD = 12648
+        speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+        speed_formatted = format_speed(speed, 5)
+
+        speed_list.append(speed_formatted)
+
+        avrage_speed = filter(speed_list,1)
+
+        #print(avrage_speed)
+
+        with open('result.txt', 'w') as file:
+           file.write(avrage_speed+"km/s")
+
+
+
+    except:
+        print("Te weinig featers.")
+
+    image_1 = image_2

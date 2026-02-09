@@ -25,18 +25,16 @@ def rotation_score(gyro):
 
 
 def capture_stable_image(filename):
-    while True:
-        gyro, accel = imu_data()
-        rotation = rotation_score(gyro)
+   
+    gyro, _ = imu_data()
+    rotation = rotation_score(gyro)
 
-        if rotation < ROTATION_THRESHOLD:
-            camera.capture(filename)
-            sleep(1)
-            break
-        else:
-            print("Te veel rotatie, foto opnieuw proberen...")
-            sleep(1)
-
+   
+    if rotation < ROTATION_THRESHOLD:
+        print(f"{filename} accepted, rotation ok")
+    else:
+        print(f"{filename} rejected, rotation too high - retry")
+        
 
 capture_stable_image(image_1)
 sleep(5)

@@ -30,7 +30,7 @@ def capture_stable_image(filename):
     rotation = rotation_score(gyro)
 
    
-    if rotation < ROTATION_THRESHOLD:
+    if rotation < ROTATION_FOUT:
         print(f"{filename} accepted, rotation ok")
     else:
         print(f"{filename} rejected, rotation too high - retry")

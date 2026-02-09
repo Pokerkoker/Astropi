@@ -12,7 +12,7 @@ camera = PiCamera()
 image_1 = 'image1.jpg'
 image_2 = 'image2.jpg'
 
-ROTATION_FOUT = 0.1
+ROTATION_THRESHOLD = 0.1  # Gecorrigeerd van ROTATION_FOUT
 
 
 def imu_data():
@@ -25,13 +25,13 @@ def rotation_score(gyro):
 
 
 def capture_stable_image(filename):
-   
+    """Capture image when rotation is stable"""
     gyro, _ = imu_data()
     rotation = rotation_score(gyro)
 
-   
-    if rotation < ROTATION_FOUT:
+    if rotation < ROTATION_THRESHOLD:
         print(f"{filename} accepted, rotation ok")
+        camera.capture(filename)  # TOEGEVOEGD: maak daadwerkelijk foto
     else:
         print(f"{filename} rejected, rotation too high - retry")
         
@@ -85,7 +85,7 @@ def find_matching_coordinates(kp1, kp2, matches):
 
 def median(distances):
     distances.sort()
-    return distances[int(len(distances)/2)]
+    return distances[len(distances) // 2]  # Gecorrigeerd: integer division
 
 def calculate_mean_distance(c1, c2):
     distances = []
@@ -104,7 +104,7 @@ def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
 def format_speed(speed, digits):
     exponent = int(math.floor(math.log10(abs(speed))))
     decimals = digits - 1 - exponent
-    return "{:.{}f}".format(speed, decimals)
+    return f"{speed:.{int(decimals)}f}"  # Gecorrigeerd: f-string met correct formatting
 
 
 GSD = 12648

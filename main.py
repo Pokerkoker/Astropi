@@ -104,58 +104,64 @@ def format_speed(speed, nr_of_digits):
 
     return speed_formatted
 
-GSD = 12648
-speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
-speed_formatted = format_speed(speed, 5)
+start_time = datetime.now
 
-print(speed_formatted)
+while ((datetime.now-start_time).total_seconds()) < 20: #600 sec
 
-with open('result.txt', 'w') as file:
-    file.write(speed_formatted)
+    print(((datetime.now -start_time).total_seconds()))    
 
-image_folder = "./imgs"
-image_extensions = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
+    GSD = 12648
+    speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+    speed_formatted = format_speed(speed, 5)
 
-images = [
-    os.path.join(image_folder, f)
-    for f in os.listdir(image_folder)
-    if f.lower().endswith(image_extensions)
-]
+    print(speed_formatted)
 
-image_1
+    with open('result.txt', 'w') as file:
+        file.write(speed_formatted)
 
-image_2 = images[1]
+    image_folder = "./imgs"
+    image_extensions = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp")
 
-speed_list = []
+    images = [
+        os.path.join(image_folder, f)
+        for f in os.listdir(image_folder)
+        if f.lower().endswith(image_extensions)
+    ]
 
-for image_2 in images:
-    
-    time_difference = get_time_difference(image_1, image_2)
+    image_1
 
-    image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+    image_2 = images[1]
 
-    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
-    matches = calculate_matches(descriptors_1, descriptors_2)
+    speed_list = []
 
-    try:
-
-        coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
-
-        average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
-
-        GSD = 12648
-        speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
-        speed_formatted = format_speed(speed, 5)
-
-        speed_list.append(speed_formatted)
-
-        avrage_speed = filter(speed_list,1)
-
-        print(avrage_speed)
-
+    for image_2 in images:
         
+        time_difference = get_time_difference(image_1, image_2)
 
-    except:
-        print("Te weinig featers.")
+        image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
 
-    image_1 = image_2
+        keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+        matches = calculate_matches(descriptors_1, descriptors_2)
+
+        try:
+
+            coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
+
+            average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+
+            GSD = 12648
+            speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+            speed_formatted = format_speed(speed, 5)
+
+            speed_list.append(speed_formatted)
+
+            avrage_speed = filter(speed_list,1)
+
+            print(avrage_speed)
+
+            
+
+        except:
+            print("Te weinig featers.")
+
+        image_1 = image_2

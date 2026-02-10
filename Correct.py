@@ -1,12 +1,8 @@
 import cv2
 import numpy as np
-import os
 
-folder_path = './imgs'
-output_folder = 'output_matches55'
-
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
+img1 = cv2.imread(os.path.join(folder, ""))
+img2 = cv2.imread(os.path.join(folder, ""))
 
 def get_land_mask(img):
     # HSV kleurfiltering blijft de beste basis
@@ -26,8 +22,7 @@ def get_land_mask(img):
     combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
     return combined_mask
 
-def process_astro_land(folder):
-    images = sorted([f for f in os.listdir(folder) if f.endswith(('.jpg', '.png', '.jpeg'))])
+def process_astro_land(img1, img2):
     
     # SIFT UPGRADE:
     # contrastThreshold: negeer kenmerken in gebieden met weinig contrast (zoals zee/mist)
@@ -43,48 +38,40 @@ def process_astro_land(folder):
     search_params = dict(checks=50)
     flann = cv2.FlannBasedMatcher(index_params, search_params)
 
-    for i in range(len(images) - 1):
-        img1 = cv2.imread(os.path.join(folder, images[i]))
-        img2 = cv2.imread(os.path.join(folder, images[i+1]))
-        if img1 is None or img2 is None: continue
+    mask1 = get_land_mask(img1)
+    mask2 = get_land_mask(img2)
 
-        mask1 = get_land_mask(img1)
-        mask2 = get_land_mask(img2)
+    # Detecteer kenmerken ENKEL op het gemaskeerde land
+    kp1, des1 = sift.detectAndCompute(img1, mask1)
+    kp2, des2 = sift.detectAndCompute(img2, mask2)
 
-        # Detecteer kenmerken ENKEL op het gemaskeerde land
-        kp1, des1 = sift.detectAndCompute(img1, mask1)
-        kp2, des2 = sift.detectAndCompute(img2, mask2)
+    matches = flann.knnMatch(des1, des2, k=2)
 
-        if des1 is None or des2 is None or len(kp1) < 10:
-            continue
+    # Zeer strenge ratio test (0.5 ipv 0.7)
+    # Dit zorgt dat alleen UNIEKE punten op land overblijven
+    good_matches = [m for m, n in matches if m.distance < 0.5 * n.distance]
 
-        matches = flann.knnMatch(des1, des2, k=2)
+    inliers = 0
+    status_mask = None
 
-        # Zeer strenge ratio test (0.5 ipv 0.7)
-        # Dit zorgt dat alleen UNIEKE punten op land overblijven
-        good_matches = [m for m, n in matches if m.distance < 0.5 * n.distance]
+    if len(good_matches) > 6:
+        src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        
+        # RANSAC: Gebruik een kleinere threshold (2.0) om alleen exact lopende punten te houden
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 2.0)
+        
+        if mask is not None:
+            inliers = np.sum(mask)
+            status_mask = mask.ravel().tolist()
 
-        inliers = 0
-        status_mask = None
-
-        if len(good_matches) > 6:
-            src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-            dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-            
-            # RANSAC: Gebruik een kleinere threshold (2.0) om alleen exact lopende punten te houden
-            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 2.0)
-            
-            if mask is not None:
-                inliers = np.sum(mask)
-                status_mask = mask.ravel().tolist()
-
-        # Alleen opslaan als we echt kwalitatieve inliers hebben
-        if inliers > 8:
-            print(f"Goede match op land: {images[i+1]} ({inliers} betrouwbare punten)")
-            res = cv2.drawMatches(img1, kp1, img2, kp2, good_matches, None, 
-                                  matchesMask=status_mask, 
-                                  flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-            
-            cv2.imwrite(os.path.join(output_folder, f"match_{images[i+1]}"), res)
-
-process_astro_land(folder_path)
+    # Alleen opslaan als we echt kwalitatieve inliers hebben
+    if inliers > 8:
+        print(f"Goede match op land: {images[i+1]} ({inliers} betrouwbare punten)")
+        res = cv2.drawMatches(img1, kp1, img2, kp2, good_matches, None, 
+                                matchesMask=status_mask, 
+                                flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        
+        cv2.imwrite(os.path.join(output_folder, f"match_{images[i+1]}"), res)
+    return good_matches
+process_astro_land(img1, img2)

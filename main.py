@@ -4,8 +4,8 @@ import cv2
 import math
 import os
 import time
-from picamera import PiCamera
 from picamzero import Camera
+import numpy as np
 
 # image_1 = 'imgs/photo_393_53245738275_o.jpg'
 # image_2 = 'imgs/photo_394_53245245041_o.jpg'
@@ -106,23 +106,101 @@ def format_speed(speed, nr_of_digits):
 
     return speed_formatted
 
+def Write_to_file(data):
+    with open('result.txt', 'w') as file:
+           file.write(data)
+
+def get_land_mask(img):
+    # HSV kleurfiltering blijft de beste basis
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    s = hsv[:, :, 1] 
+    v = hsv[:, :, 2]
+
+    # Strengere kleurselectie: land heeft meestal meer verzadiging dan oceaan/wolken
+    _, color_mask = cv2.threshold(s, 35, 255, cv2.THRESH_BINARY)
+    # Donkere gebieden filteren (diepe oceaan uitsluiten)
+    _, brightness_mask = cv2.threshold(v, 30, 255, cv2.THRESH_BINARY)
+    
+    combined_mask = cv2.bitwise_and(color_mask, brightness_mask)
+    
+    # Haal kleine ruis weg
+    kernel = np.ones((7,7), np.uint8)
+    combined_mask = cv2.morphologyEx(combined_mask, cv2.MORPH_OPEN, kernel)
+    return combined_mask
+
+def calculate_land_matches(image_1_cv, image_2_cv):
+    """
+    Replacement for calculate_features + calculate_matches
+    Returns: keypoints_1, keypoints_2, correct_matches
+    """
+
+    sift = cv2.SIFT_create(
+        nfeatures=1000,
+        contrastThreshold=0.04,
+        edgeThreshold=10,
+        sigma=1.6
+    )
+
+    # Land masks
+    mask1 = get_land_mask(cv2.cvtColor(image_1_cv, cv2.COLOR_GRAY2BGR))
+    mask2 = get_land_mask(cv2.cvtColor(image_2_cv, cv2.COLOR_GRAY2BGR))
+
+    kp1, des1 = sift.detectAndCompute(image_1_cv, mask1)
+    kp2, des2 = sift.detectAndCompute(image_2_cv, mask2)
+
+    if des1 is None or des2 is None:
+        return [], [], []
+
+    # FLANN matcher (required for SIFT)
+    index_params = dict(algorithm=1, trees=5)
+    search_params = dict(checks=50)
+    flann = cv2.FlannBasedMatcher(index_params, search_params)
+
+    matches_knn = flann.knnMatch(des1, des2, k=2)
+
+    # Strict Lowe ratio test
+    good_matches = [m for m, n in matches_knn if m.distance < 0.5 * n.distance]
+
+    if len(good_matches) < 6:
+        return kp1, kp2, []
+
+    src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+    dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+    _, ransac_mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 2.0)
+
+    if ransac_mask is None:
+        return kp1, kp2, []
+
+    # Keep only RANSAC inliers
+    correct_matches = [
+        m for m, inlier in zip(good_matches, ransac_mask.ravel())
+        if inlier
+    ]
+
+    return kp1, kp2, correct_matches
+
 start_time = datetime.now()
-
-
-from picamzero import Camera
 
 cam = Camera()
 
-
-
 image_1 = cam.take_photo("photo1.jpg")
-image_2 = cam.take_photo("photo2.jpg")  
+image_2 = cam.take_photo("photo2.jpg")
 
-while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
+
+
+total_time = 600 #the time that the program runs, normaly 600 sec
+
+while (datetime.now() - start_time).total_seconds() < total_time:
     
     image_1 = cam.take_photo("photo1.jpg")
 
-    time.sleep(45)
+    # if total_time-(datetime.now() - start_time).total_seconds() > 50:#voorkomt dat de code voor 45 seconde wacht terwijl de 10 minuten bijna om zijn. and 
+    #     time.sleep(45)#mogelijk nodig voor te wachten dat de foto's ver genoeg van elkaar zijn.
+    # else:
+    #     # Tijd bijna om → niet meer slapen
+    #     pass 
+        
 
     image_2 = cam.take_photo("photo2.jpg")
 
@@ -134,8 +212,7 @@ while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
 
     image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
 
-    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
-    matches = calculate_matches(descriptors_1, descriptors_2)
+    keypoints_1, keypoints_2, matches = calculate_land_matches(image_1_cv, image_2_cv)
 
     try:
 
@@ -153,8 +230,8 @@ while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
 
         #print(avrage_speed)
 
-        with open('result.txt', 'w') as file:
-           file.write(avrage_speed+"km/s")
+        Write_to_file(f"{avrage_speed} km/s")
+        #Write_to_file(f"{(datetime.now()-start_time).total_seconds()}")
 
 
 
@@ -162,3 +239,9 @@ while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
         print("Te weinig featers.")
 
     image_1 = image_2
+
+    Write_to_file(f"{(datetime.now()-start_time).total_seconds()}")
+
+    break
+
+    #image_2 = cam.take_photo("photo2.jpg")

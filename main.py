@@ -18,75 +18,52 @@ def get_time(image):
     return time
 
 def get_time_difference(image_1, image_2):
-    time_1 = get_time(image_1)
-    time_2 = get_time(image_2)
-    time_difference = time_2 - time_1
-
-    return time_difference.seconds
+    return (get_time(image_2) - get_time(image_1)).seconds
 
 #time_difference = get_time_difference(image_1, image_2)
 
+
 def convert_to_cv(image_1, image_2):
-    image_1_cv = cv2.imread(image_1, 0)
-    image_2_cv = cv2.imread(image_2, 0)
-    return image_1_cv, image_2_cv
+    return cv2.imread(image_1, 0), cv2.imread(image_2, 0)
 
 def calculate_features(image_1_cv, image_2_cv, feature_number):
-    orb = cv2.ORB_create(nfeatures = feature_number)
-    keypoints_1, descriptors_1 = orb.detectAndCompute(image_1_cv, None)
-    keypoints_2, descriptors_2 = orb.detectAndCompute(image_2_cv, None)
-    return keypoints_1, keypoints_2, descriptors_1, descriptors_2
+    orb = cv2.ORB_create(nfeatures=feature_number)
+    kp1, des1 = orb.detectAndCompute(image_1_cv, None)
+    kp2, des2 = orb.detectAndCompute(image_2_cv, None)
+    return kp1, kp2, des1, des2
 
 def calculate_matches(descriptors_1, descriptors_2):
-    brute_force = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = brute_force.match(descriptors_1, descriptors_2)
-    matches = sorted(matches, key=lambda x: x.distance)
-    return matches
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = bf.match(descriptors_1, descriptors_2)
+    return sorted(matches, key=lambda x: x.distance)
 
-#image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
 
-#keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
-#matches = calculate_matches(descriptors_1, descriptors_2)
+image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+kp1, kp2, des1, des2 = calculate_features(image_1_cv, image_2_cv, 500)
+matches = calculate_matches(des1, des2)
 
-def display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches):
-    match_img = cv2.drawMatches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches[:100], None)
-    resize = cv2.resize(match_img, (1600,600), interpolation = cv2.INTER_AREA)
-    cv2.imshow('matches', resize)
-    cv2.waitKey(0)
-    cv2.destroyWindow('matches')
 
-#display_matches(image_1_cv, keypoints_1, image_2_cv, keypoints_2, matches)
+def find_matching_coordinates(kp1, kp2, matches):
+    c1, c2 = [], []
+    for m in matches:
+        (x1, y1) = kp1[m.queryIdx].pt
+        (x2, y2) = kp2[m.trainIdx].pt
+        c1.append((x1, y1))
+        c2.append((x2, y2))
+    return c1, c2
 
-def find_matching_coordinates(keypoints_1, keypoints_2, matches):
-        coordinates_1 = []
-        coordinates_2 = []
-        for match in matches:
-            image_1_idx = match.queryIdx
-            image_2_idx = match.trainIdx
-            (x1,y1) = keypoints_1[image_1_idx].pt
-            (x2,y2) = keypoints_2[image_2_idx].pt
-            coordinates_1.append((x1,y1))
-            coordinates_2.append((x2,y2))
-        return coordinates_1, coordinates_2
-
-#coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
-
-def calculate_mean_distance(coordinates_1, coordinates_2):
-    all_distances = 0
-    merged_coordinates = list(zip(coordinates_1, coordinates_2))
-    distances = []
-    for coordinate in merged_coordinates:
-        x_difference = coordinate[0][0] - coordinate[1][0]
-        y_difference = coordinate[0][1] - coordinate[1][1]
-        distance = math.hypot(x_difference, y_difference)
-        distances.append(distance)
-    return filter(distances,10)
-
-def filter(distances,count): # Takes a list of distances, sorts it and gets the avarage distances of the middel 10 items.
-    distance = 0
-    length = len(distances)
+def median(distances):
     distances.sort()
+    return distances[len(distances) // 2]  # Gecorrigeerd: integer division
 
+def calculate_mean_distance(c1, c2):
+    distances = []
+    for p1, p2 in zip(c1, c2):
+        distances.append(math.hypot(p1[0]-p2[0], p1[1]-p2[1]))
+    return median(distances)
+
+coordinates_1, coordinates_2 = find_matching_coordinates(kp1, kp2, matches)
+average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
     for i in range(int(length/2)-int(count/2),int(length/2)+int(count/2)):
         distance += distances[i]
 
@@ -94,17 +71,16 @@ def filter(distances,count): # Takes a list of distances, sorts it and gets the 
 
 #average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
+
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
-    distance = feature_distance * GSD / 100000 # conversie van pixels naar km
-    speed = distance / time_difference
-    return speed
+    distance = feature_distance * GSD / 100000
+    return distance / time_difference
 
-def format_speed(speed, nr_of_digits):
+def format_speed(speed, digits):
     exponent = int(math.floor(math.log10(abs(speed))))
-    decimals = nr_of_digits - 1 - exponent
-    speed_formatted = "{:.{}f}".format(speed, decimals)
+    decimals = digits - 1 - exponent
+    return f"{speed:.{int(decimals)}f}"  # Gecorrigeerd: f-string met correct formatting
 
-    return speed_formatted
 
 start_time = datetime.now()
 

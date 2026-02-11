@@ -2,44 +2,13 @@ from exif import Image
 from datetime import datetime
 import cv2
 import math
-from sense_hat import SenseHat
+import os
+import time
 from picamera import PiCamera
-from time import sleep
+from picamzero import Camera
 
-sensor = SenseHat()
-camera = PiCamera()
-
-image_1 = 'image1.jpg'
-image_2 = 'image2.jpg'
-
-ROTATION_THRESHOLD = 0.1  # Gecorrigeerd van ROTATION_FOUT
-
-
-def imu_data():
-    gyro = sensor.get_gyroscope_raw()
-    accel = sensor.get_accelerometer_raw()
-    return gyro, accel
-
-def rotation_score(gyro):
-    return abs(gyro['x']) + abs(gyro['y']) + abs(gyro['z'])
-
-
-def capture_stable_image(filename):
-    """Capture image when rotation is stable"""
-    gyro, _ = imu_data()
-    rotation = rotation_score(gyro)
-
-    if rotation < ROTATION_THRESHOLD:
-        print(f"{filename} accepted, rotation ok")
-        camera.capture(filename)  # TOEGEVOEGD: maak daadwerkelijk foto
-    else:
-        print(f"{filename} rejected, rotation too high - retry")
-        
-
-capture_stable_image(image_1)
-sleep(5)
-capture_stable_image(image_2)
-
+# image_1 = 'imgs/photo_393_53245738275_o.jpg'
+# image_2 = 'imgs/photo_394_53245245041_o.jpg'
 
 def get_time(image):
     with open(image, 'rb') as image_file:
@@ -51,7 +20,7 @@ def get_time(image):
 def get_time_difference(image_1, image_2):
     return (get_time(image_2) - get_time(image_1)).seconds
 
-time_difference = get_time_difference(image_1, image_2)
+#time_difference = get_time_difference(image_1, image_2)
 
 
 def convert_to_cv(image_1, image_2):
@@ -95,6 +64,12 @@ def calculate_mean_distance(c1, c2):
 
 coordinates_1, coordinates_2 = find_matching_coordinates(kp1, kp2, matches)
 average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+    for i in range(int(length/2)-int(count/2),int(length/2)+int(count/2)):
+        distance += distances[i]
+
+    return distance/10
+
+#average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
 
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
@@ -107,11 +82,59 @@ def format_speed(speed, digits):
     return f"{speed:.{int(decimals)}f}"  # Gecorrigeerd: f-string met correct formatting
 
 
-GSD = 12648
-speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
-speed_formatted = format_speed(speed, 5)
+start_time = datetime.now()
 
-print(speed_formatted)
 
-with open('result.txt', 'w') as file:
-    file.write(speed_formatted)
+from picamzero import Camera
+
+cam = Camera()
+
+
+
+image_1 = cam.take_photo("photo1.jpg")
+image_2 = cam.take_photo("photo2.jpg")  
+
+while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
+    
+    image_1 = cam.take_photo("photo1.jpg")
+
+    time.sleep(45)
+
+    image_2 = cam.take_photo("photo2.jpg")
+
+    images = []
+
+    speed_list = []
+        
+    time_difference = get_time_difference(image_1, image_2)
+
+    image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+    matches = calculate_matches(descriptors_1, descriptors_2)
+
+    try:
+
+        coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
+
+        average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+
+        GSD = 12648
+        speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+        speed_formatted = format_speed(speed, 5)
+
+        speed_list.append(speed_formatted)
+
+        avrage_speed = filter(speed_list,1)
+
+        #print(avrage_speed)
+
+        with open('result.txt', 'w') as file:
+           file.write(avrage_speed+"km/s")
+
+
+
+    except:
+        print("Te weinig featers.")
+
+    image_1 = image_2

@@ -87,4 +87,82 @@ def process_astro_land(folder):
             
             cv2.imwrite(os.path.join(output_folder, f"match_{images[i+1]}"), res)
 
+def process_land(img1, img2):
+    """
+    Detecteert SIFT features op land, matcht ze met FLANN,
+    filtert op ratio test en RANSAC inliers.
+    
+    Return:
+        inlier_matches : lijst van cv2.DMatch objects (RANSAC inliers)
+        kp1, kp2       : keypoints van beide afbeeldingen
+    """
+    if img1 is None or img2 is None:
+        return None
+
+    # SIFT
+    sift = cv2.SIFT_create(
+        nfeatures=1000,
+        contrastThreshold=0.04,
+        edgeThreshold=10,
+        sigma=1.6
+    )
+
+    # FLANN matcher
+    flann = cv2.FlannBasedMatcher(
+        dict(algorithm=1, trees=5),
+        dict(checks=50)
+    )
+
+    # Land mask
+    mask1 = get_land_mask(img1)
+    mask2 = get_land_mask(img2)
+
+    # Keypoints & descriptors
+    kp1, des1 = sift.detectAndCompute(img1, mask1)
+    kp2, des2 = sift.detectAndCompute(img2, mask2)
+
+    if des1 is None or des2 is None or len(kp1) < 10:
+        return None
+
+    # KNN match
+    matches = flann.knnMatch(des1, des2, k=2)
+
+    # Zeer strenge ratio test
+    good_matches = [m for m, n in matches if m.distance < 0.5 * n.distance]
+
+    if len(good_matches) < 6:
+        return None
+
+    # RANSAC filtering
+    src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+    dst_pts = np.float32([kp2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+
+    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 2.0)
+
+    if mask is None:
+        return None
+
+    # Filter op inliers
+    inlier_matches = [good_matches[i] for i in range(len(good_matches)) if mask[i]]
+
+    if len(inlier_matches) < 8:
+        return None
+
+    return inlier_matches, kp1, kp2
+
+
 process_astro_land(folder_path)
+
+def filter(distances): # Takes a list of distances, sorts it and gets the avarage distances of the middel 10 items.
+    distance = 0
+    mid = len(distances)//2
+    distances.sort()
+
+    if not distances:
+        return None
+
+    if len(distances) % 2 == 1:
+        return distances[mid]
+    else:
+        return (distances[mid - 1] + distances[mid]) / 2
+    

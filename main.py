@@ -83,16 +83,11 @@ def capture_stable_image(filename):
         else:
             print(f"{filename} rejected, rotation too high - retry")
         
-def filter(distances,count): # Takes a list of distances, sorts it and gets the avarage distances of the middel 10 items.
-    distance = 0
-    length = len(distances)
-    distances.sort()
-
-    for i in range(int(length/2)-int(count/2),int(length/2)+int(count/2)):
-        distance += distances[i]
-
-    return distance/10
-    
+def filter(distances): # Takes a list of distances, sorts it and gets the avarage distances of the middel 10 items.
+    total = 0
+    for item in distances:
+        total += item 
+    return total/len(distances)
         
 
 def calculate_speed_in_kmps(feature_distance, GSD, time_difference):
@@ -126,49 +121,59 @@ image_2 = capture_stable_image("photo2.jpg")
 speed_list = []
 images = []
 
-while (datetime.now()-start_time).total_seconds()  < 60: #600 sec
+while (datetime.now()-start_time).total_seconds()  < 600: #600 sec
     
+   
     image_1 = capture_stable_image("photo1.jpg")
 
-    if (datetime.now()-start).total_seconds()  > 30: # it takes 45 for the space station to do change the angel with 1° so 2/3 of that is enough diffrence to calculate the distances.
-        image_2 =  capture_stable_image("photo2.jpg") 
-        start = datetime.now()
+    if image_1 is None:
+        time.sleep(0.2)
+        continue
 
-    else:
+    if (datetime.now() - start).total_seconds() <= 30:
+        time.sleep(0.2)
+        continue # it takes 45 for the space station to do change the angel with 1° so 2/3 of that is enough diffrence to calculate the distances.
+
+    image_2 = capture_stable_image("photo2.jpg")
+
+    if image_2 is None:
+        continue
         
-        time_difference = get_time_difference(image_1, image_2)
+    time_difference = get_time_difference(image_1, image_2)
 
-        image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
+    image_1_cv, image_2_cv = convert_to_cv(image_1, image_2)
 
-        keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
-        matches = calculate_matches(descriptors_1, descriptors_2)
-
-
-
-        try:
-
-            coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
-
-            average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
-
-            GSD = 12648
-            speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
-            speed_formatted = format_speed(speed, 5)
-
-            if speed_formatted != 0:
-                speed_list.append(speed_formatted)
-
-                avrage_speed = filter(speed_list,1)
-
-                #print(avrage_speed)
-
-
-                Write_to_file(str(int(avrage_speed)))
-                print("Write to file")
+    keypoints_1, keypoints_2, descriptors_1, descriptors_2 = calculate_features(image_1_cv, image_2_cv, 1000)
+    matches = calculate_matches(descriptors_1, descriptors_2)
 
 
 
-        except:
-            print("Te weinig featers.")
+    try:
 
-        image_1 = image_2
+        coordinates_1, coordinates_2 = find_matching_coordinates(keypoints_1, keypoints_2, matches)
+
+        average_feature_distance = calculate_mean_distance(coordinates_1, coordinates_2)
+
+        GSD = 12648
+        speed = calculate_speed_in_kmps(average_feature_distance, GSD, time_difference)
+        speed_formatted = format_speed(speed, 5)
+
+        if speed != 0:
+            speed_list.append(speed)
+
+            avrage_speed = filter(speed_list)
+
+            #print(avrage_speed)
+
+
+            Write_to_file(format_speed(round(speed,5), 5))
+            print("Write to file")
+
+
+
+    except:
+        print("Te weinig featers.")
+
+    start = datetime.now()
+
+    image_1 = image_2
